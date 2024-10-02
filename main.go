@@ -11,14 +11,12 @@ import (
 	"github.com/stripe/stripe-go/charge"
 )
 
-// ChargeJSON incoming data for Stripe API
 type ChargeJSON struct {
 	Amount       int64  `json:"amount"`
 	ReceiptEmail string `json:"receiptEmail"`
 }
 
 func main() {
-	// load .env file
 	err := godotenv.Load("api.env")
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -27,14 +25,23 @@ func main() {
 	r := gin.Default()
 
 	r.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "Hello, World!",
-		})
+		// Read the HTML file
+		htmlContent, err := os.ReadFile("welcome.html")
+		if err != nil {
+			log.Println("Error reading welcome.html:", err)
+			c.String(http.StatusInternalServerError, "Internal Server Error")
+			return
+		}
+
+		c.Data(http.StatusOK, "text/html; charset=utf-8", htmlContent)
 	})
 
 	r.POST("/api/charges", func(c *gin.Context) {
 		var json ChargeJSON
-		c.BindJSON(&json)
+		if err := c.BindJSON(&json); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
 		apiKey := os.Getenv("sk_test")
 		stripe.Key = apiKey
@@ -43,7 +50,8 @@ func main() {
 			Amount:       stripe.Int64(json.Amount),
 			Currency:     stripe.String(string(stripe.CurrencyINR)),
 			Source:       &stripe.SourceParams{Token: stripe.String("tok_visa")},
-			ReceiptEmail: stripe.String(json.ReceiptEmail)})
+			ReceiptEmail: stripe.String(json.ReceiptEmail),
+		})
 
 		if err != nil {
 			c.String(http.StatusBadRequest, "Request failed")
@@ -52,7 +60,6 @@ func main() {
 
 		c.String(http.StatusCreated, "Successfully charged")
 	})
-	create_Customer(r)
 
 	r.Run(":8081")
 }
